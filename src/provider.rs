@@ -4,18 +4,24 @@
 //! as authority; the calling host owns authorization and orchestration.
 
 use crate::composition::{MatchRequest, analyze};
-use crate::evaluation::{CueEvaluator, EvaluationReport, Evaluator, NativeEvaluator, Status, digest};
+use crate::evaluation::{
+    CueEvaluator, EvaluationReport, Evaluator, NativeEvaluator, Status, digest,
+};
 use crate::graph::{GraphQuery, GraphSnapshot, derive_candidate};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::time::Duration;
 
 fn required<'a>(arguments: &'a Value, name: &str) -> Result<&'a Value, String> {
-    arguments.get(name).ok_or_else(|| format!("Missing argument: {name}"))
+    arguments
+        .get(name)
+        .ok_or_else(|| format!("Missing argument: {name}"))
 }
 
 fn text<'a>(arguments: &'a Value, name: &str) -> Result<&'a str, String> {
-    required(arguments, name)?.as_str().ok_or_else(|| format!("{name} must be a string"))
+    required(arguments, name)?
+        .as_str()
+        .ok_or_else(|| format!("{name} must be a string"))
 }
 
 fn snapshot(arguments: &Value) -> Result<GraphSnapshot, String> {
@@ -26,9 +32,14 @@ fn snapshot(arguments: &Value) -> Result<GraphSnapshot, String> {
 }
 
 fn relation(arguments: &Value) -> Result<Option<&str>, String> {
-    arguments.get("relation").map(|value| {
-        value.as_str().ok_or_else(|| "relation must be a string".to_owned())
-    }).transpose()
+    arguments
+        .get("relation")
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or_else(|| "relation must be a string".to_owned())
+        })
+        .transpose()
 }
 
 fn check_keys(arguments: &Value, allowed: &[&str]) -> Result<(), String> {
@@ -39,7 +50,13 @@ fn check_keys(arguments: &Value, allowed: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-pub fn evaluate(backend: &str, contract: &Value, input: &Value, cue: &Path, timeout: Duration) -> EvaluationReport {
+pub fn evaluate(
+    backend: &str,
+    contract: &Value,
+    input: &Value,
+    cue: &Path,
+    timeout: Duration,
+) -> EvaluationReport {
     match backend {
         "native" => NativeEvaluator.evaluate(contract, input),
         "cue" => CueEvaluator::new(cue.to_path_buf(), timeout).evaluate(contract, input),
@@ -49,56 +66,85 @@ pub fn evaluate(backend: &str, contract: &Value, input: &Value, cue: &Path, time
 }
 
 /// Domain operations are shared by the CLI and the provider protocol.
-pub fn execute(name: &str, arguments: &Value, cue: &Path, timeout: Duration) -> Result<Value, String> {
+pub fn execute(
+    name: &str,
+    arguments: &Value,
+    cue: &Path,
+    timeout: Duration,
+) -> Result<Value, String> {
     match name {
         "graph.inspect" => {
             check_keys(arguments, &["graph"])?;
             let graph = snapshot(arguments)?;
             Ok(json!({
                 "schema_version": 1, "snapshot": graph.id, "revision": graph.revision,
-                "digest": digest(required(arguments, "graph")?),
+                "digest": graph.digest(),
                 "nodes": graph.nodes.len(), "edges": graph.edges.len(),
-                "basis": "supplied_observations"
+                "basis": "supplied_observations", "digest_basis": "normalized_graph_snapshot_v1"
             }))
         }
         "graph.neighbors" => {
             check_keys(arguments, &["graph", "subject", "relation"])?;
             let graph = snapshot(arguments)?;
             let edges = graph.neighbors(text(arguments, "subject")?, relation(arguments)?)?;
-            Ok(json!({"schema_version":1,"snapshot":graph.id,"revision":graph.revision,
-                "input_digest":digest(required(arguments,"graph")?),"edges":edges}))
+            Ok(
+                json!({"schema_version":1,"snapshot":graph.id,"revision":graph.revision,
+                "input_digest":graph.digest(),"digest_basis":"normalized_graph_snapshot_v1","edges":edges}),
+            )
         }
         "graph.path" => {
             check_keys(arguments, &["graph", "from", "to", "relation", "max_depth"])?;
             let graph = snapshot(arguments)?;
             let depth = match arguments.get("max_depth") {
                 None => 8,
-                Some(value) => usize::try_from(value.as_u64().ok_or("max_depth must be a nonnegative integer")?)
-                    .map_err(|error| error.to_string())?,
+                Some(value) => usize::try_from(
+                    value
+                        .as_u64()
+                        .ok_or("max_depth must be a nonnegative integer")?,
+                )
+                .map_err(|error| error.to_string())?,
             };
-            let path = graph.path(text(arguments, "from")?, text(arguments, "to")?, relation(arguments)?, depth)?;
-            Ok(json!({"schema_version":1,"snapshot":graph.id,"revision":graph.revision,
-                "input_digest":digest(required(arguments,"graph")?),"path":path,
-                "max_depth":depth,"basis":"supplied_observations"}))
+            let path = graph.path(
+                text(arguments, "from")?,
+                text(arguments, "to")?,
+                relation(arguments)?,
+                depth,
+            )?;
+            Ok(
+                json!({"schema_version":1,"snapshot":graph.id,"revision":graph.revision,
+                "input_digest":graph.digest(),"path":path,
+                "max_depth":depth,"basis":"supplied_observations","digest_basis":"normalized_graph_snapshot_v1"}),
+            )
         }
         "contract.derive" => {
             check_keys(arguments, &["graph", "subject"])?;
             let graph = snapshot(arguments)?;
-            let mut candidate = derive_candidate(&graph, text(arguments, "subject")?)?;
-            candidate["source"]["digest"] = json!(digest(required(arguments, "graph")?));
-            Ok(candidate)
+            derive_candidate(&graph, text(arguments, "subject")?)
         }
         "contract.evaluate" => {
             check_keys(arguments, &["backend", "contract", "input"])?;
-            serde_json::to_value(evaluate(text(arguments, "backend")?, required(arguments, "contract")?,
-                required(arguments, "input")?, cue, timeout)).map_err(|error| error.to_string())
+            serde_json::to_value(evaluate(
+                text(arguments, "backend")?,
+                required(arguments, "contract")?,
+                required(arguments, "input")?,
+                cue,
+                timeout,
+            ))
+            .map_err(|error| error.to_string())
         }
         "contract.compare" => {
             check_keys(arguments, &["native", "cue", "input"])?;
             let input = required(arguments, "input")?;
-            let native = evaluate("native", required(arguments, "native")?, input, cue, timeout);
+            let native = evaluate(
+                "native",
+                required(arguments, "native")?,
+                input,
+                cue,
+                timeout,
+            );
             let cue = evaluate("cue", required(arguments, "cue")?, input, cue, timeout);
-            let determinate = |status: &Status| matches!(status, Status::Satisfied | Status::Violated);
+            let determinate =
+                |status: &Status| matches!(status, Status::Satisfied | Status::Violated);
             let agreement = if !determinate(&native.status) || !determinate(&cue.status) {
                 "not_comparable"
             } else if native.status == cue.status {
@@ -106,13 +152,16 @@ pub fn execute(name: &str, arguments: &Value, cue: &Path, timeout: Duration) -> 
             } else {
                 "disagree"
             };
-            Ok(json!({"schema_version":1,"agreement":agreement,"native":native,"cue":cue,
-                "note":"Agreement applies to these inputs and authored contracts; it does not prove equivalent languages."}))
+            Ok(
+                json!({"schema_version":1,"agreement":agreement,"native":native,"cue":cue,
+                "note":"Agreement applies to these inputs and authored contracts; it does not prove equivalent languages."}),
+            )
         }
         "reuse.analyze" => {
             check_keys(arguments, &["request"])?;
-            let request: MatchRequest = serde_json::from_value(required(arguments, "request")?.clone())
-                .map_err(|error| error.to_string())?;
+            let request: MatchRequest =
+                serde_json::from_value(required(arguments, "request")?.clone())
+                    .map_err(|error| error.to_string())?;
             let report = analyze(&request)?;
             let mut result = serde_json::to_value(report).map_err(|error| error.to_string())?;
             result["input_digest"] = json!(digest(required(arguments, "request")?));
@@ -124,13 +173,48 @@ pub fn execute(name: &str, arguments: &Value, cue: &Path, timeout: Duration) -> 
 
 pub fn discover() -> Value {
     let definitions = [
-        ("graph.inspect", "Validate and summarize supplied graph observations.", vec!["graph"], vec![]),
-        ("graph.neighbors", "Inspect recorded outbound relationships.", vec!["graph", "subject"], vec!["relation"]),
-        ("graph.path", "Find a bounded shortest recorded dependency path.", vec!["graph", "from", "to"], vec!["relation", "max_depth"]),
-        ("contract.derive", "Derive a candidate expectation from positive graph observations.", vec!["graph", "subject"], vec![]),
-        ("contract.evaluate", "Evaluate independent input against a native or CUE contract.", vec!["backend", "contract", "input"], vec![]),
-        ("contract.compare", "Compare native and CUE evaluations on the same input.", vec!["native", "cue", "input"], vec![]),
-        ("reuse.analyze", "Inspect declared interval coverage, assumptions and coupling gaps.", vec!["request"], vec![]),
+        (
+            "graph.inspect",
+            "Validate and summarize supplied graph observations.",
+            vec!["graph"],
+            vec![],
+        ),
+        (
+            "graph.neighbors",
+            "Inspect recorded outbound relationships.",
+            vec!["graph", "subject"],
+            vec!["relation"],
+        ),
+        (
+            "graph.path",
+            "Find a bounded shortest recorded dependency path.",
+            vec!["graph", "from", "to"],
+            vec!["relation", "max_depth"],
+        ),
+        (
+            "contract.derive",
+            "Derive a candidate expectation from positive graph observations.",
+            vec!["graph", "subject"],
+            vec![],
+        ),
+        (
+            "contract.evaluate",
+            "Evaluate independent input against a native or CUE contract.",
+            vec!["backend", "contract", "input"],
+            vec![],
+        ),
+        (
+            "contract.compare",
+            "Compare native and CUE evaluations on the same input.",
+            vec!["native", "cue", "input"],
+            vec![],
+        ),
+        (
+            "reuse.analyze",
+            "Inspect declared interval coverage, assumptions and coupling gaps.",
+            vec!["request"],
+            vec![],
+        ),
     ];
     let capabilities: Vec<Value> = definitions.into_iter().map(|(name, description, required, optional)| {
         let mut properties = serde_json::Map::new();
@@ -154,13 +238,23 @@ pub fn discover() -> Value {
 }
 
 pub fn dispatch(request: &Value, cue: &Path, timeout: Duration) -> Result<Value, String> {
-    let object = request.as_object().ok_or("Provider request must be an object")?;
+    let object = request
+        .as_object()
+        .ok_or("Provider request must be an object")?;
     if object.len() == 1 && request.get("operation").and_then(Value::as_str) == Some("discover") {
         return Ok(discover());
     }
     check_keys(request, &["name", "arguments", "context"])?;
-    if request.get("context").is_some_and(|context| !context.is_object()) {
+    if request
+        .get("context")
+        .is_some_and(|context| !context.is_object())
+    {
         return Err("context must be an object".to_owned());
     }
-    execute(text(request, "name")?, required(request, "arguments")?, cue, timeout)
+    execute(
+        text(request, "name")?,
+        required(request, "arguments")?,
+        cue,
+        timeout,
+    )
 }

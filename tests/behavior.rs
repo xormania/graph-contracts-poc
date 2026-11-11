@@ -128,7 +128,10 @@ fn combining_coverage_preserves_evidence_and_handles_integer_endpoints() {
     assert_eq!(report["complete"], true);
     assert_eq!(report["residual"], json!([]));
     assert_eq!(report["covered"], json!([interval(1, 10)]));
-    assert_eq!(report["matches"][0]["primitive"]["evidence"], json!(["fixture:left"]));
+    assert_eq!(
+        report["matches"][0]["primitive"]["evidence"],
+        json!(["fixture:left"])
+    );
 
     for (right_start, expected) in [(0, json!([])), (1, json!([interval(0, 0)]))] {
         let mut input = request(vec![
@@ -150,7 +153,10 @@ fn unestablished_assumptions_do_not_count_as_coverage() {
     input["established_assumptions"] = json!(["source-current=false"]);
     let report = analyze(input.clone());
     assert_eq!(report["matches"][0]["status"], "conditional");
-    assert_eq!(report["matches"][0]["missing_assumptions"], json!(["source-current"]));
+    assert_eq!(
+        report["matches"][0]["missing_assumptions"],
+        json!(["source-current"])
+    );
     assert_eq!(report["matches"][0]["covered"], Value::Null);
     assert_eq!(report["residual"], json!([interval(1, 10)]));
     assert_eq!(report["complete"], false);
@@ -213,7 +219,10 @@ fn graph_queries_are_deterministic_bounded_and_return_witnesses() {
     graph.validate().unwrap();
     let neighbors = graph.neighbors("root", Some("uses")).unwrap();
     assert_eq!(
-        neighbors.iter().map(|edge| edge.to.as_str()).collect::<Vec<_>>(),
+        neighbors
+            .iter()
+            .map(|edge| edge.to.as_str())
+            .collect::<Vec<_>>(),
         vec!["a", "b"]
     );
     let path = graph.path("root", "c", Some("uses"), 2).unwrap().unwrap();
@@ -223,17 +232,19 @@ fn graph_queries_are_deterministic_bounded_and_return_witnesses() {
     );
     assert_eq!(path[0].evidence, vec!["source:z"]);
     assert!(graph.path("root", "c", Some("uses"), 1).unwrap().is_none());
-    assert!(graph.path("c", "root", Some("uses"), 100).unwrap().is_none());
+    assert!(
+        graph
+            .path("c", "root", Some("uses"), 100)
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(graph.path("root", "root", None, 0).unwrap(), Some(vec![]));
     assert!(graph.path("absent", "root", None, 10).is_err());
     assert!(graph.neighbors("absent", None).is_err());
 
     let mut reversed = graph.clone();
     reversed.edges.reverse();
-    assert_eq!(
-        reversed.neighbors("root", Some("uses")).unwrap(),
-        neighbors
-    );
+    assert_eq!(reversed.neighbors("root", Some("uses")).unwrap(), neighbors);
 }
 
 #[test]
@@ -281,10 +292,18 @@ fn native_evaluation_distinguishes_missing_fact_and_violation() {
         "kind": "equals",
         "expected": true
     })]);
-    assert_eq!(native(&equality, &json!({"value": 1}))["status"], "violated");
+    assert_eq!(
+        native(&equality, &json!({"value": 1}))["status"],
+        "violated"
+    );
 
-    let exists = rules(vec![json!({"id": "present", "pointer": "/value", "kind": "exists"})]);
-    assert_eq!(native(&exists, &json!({"value": null}))["status"], "satisfied");
+    let exists = rules(vec![
+        json!({"id": "present", "pointer": "/value", "kind": "exists"}),
+    ]);
+    assert_eq!(
+        native(&exists, &json!({"value": null}))["status"],
+        "satisfied"
+    );
 }
 
 #[test]
@@ -305,7 +324,9 @@ fn native_contains_preserves_relationship_fields_and_rejects_malformed_contracts
     let malformed = [
         json!({"schema_version": 1, "rules": "not-a-list"}),
         rules(vec![]),
-        rules(vec![json!({"id": "bad", "pointer": "not/a/pointer", "kind": "exists"})]),
+        rules(vec![
+            json!({"id": "bad", "pointer": "not/a/pointer", "kind": "exists"}),
+        ]),
     ];
     for contract in malformed {
         assert_eq!(native(&contract, &json!({}))["status"], "error");
@@ -338,16 +359,25 @@ fn candidate_derivation_preserves_old_expectation_after_graph_change() {
     assert_eq!(candidate["source"]["snapshot"], "fixture");
     assert_eq!(candidate["source"]["revision"], "rev-1");
     let original = serde_json::to_value(&graph).unwrap();
-    assert_eq!(native(&candidate["contract"], &original)["status"], "satisfied");
+    assert_eq!(
+        native(&candidate["contract"], &original)["status"],
+        "satisfied"
+    );
 
     let mut changed = original.clone();
     changed["nodes"]["root"]["kind"] = json!("different-kind");
-    assert_eq!(native(&candidate["contract"], &changed)["status"], "violated");
+    assert_eq!(
+        native(&candidate["contract"], &changed)["status"],
+        "violated"
+    );
 
     let mut missing_edge = graph.clone();
     missing_edge.edges.retain(|edge| edge.id != "a");
     assert_eq!(
-        native(&candidate["contract"], &serde_json::to_value(missing_edge).unwrap())["status"],
+        native(
+            &candidate["contract"],
+            &serde_json::to_value(missing_edge).unwrap()
+        )["status"],
         "violated"
     );
     assert!(graph::derive_candidate(&graph, "missing").is_err());
@@ -361,7 +391,10 @@ fn candidate_derivation_preserves_old_expectation_after_graph_change() {
     }));
     let candidate = graph::derive_candidate(&special, "svc/~").unwrap();
     assert_eq!(
-        native(&candidate["contract"], &serde_json::to_value(special).unwrap())["status"],
+        native(
+            &candidate["contract"],
+            &serde_json::to_value(special).unwrap()
+        )["status"],
         "satisfied"
     );
 }

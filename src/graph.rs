@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 /// A versioned set of recorded nodes and directed relationships.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -51,6 +52,12 @@ pub struct Edge {
 }
 
 impl GraphSnapshot {
+    /// Hash the normalized typed snapshot, including defaulted fields.
+    pub fn digest(&self) -> String {
+        let value = serde_json::to_value(self).expect("graph snapshot");
+        format!("{:x}", Sha256::digest(serde_json::to_vec(&value).expect("graph JSON")))
+    }
+
     /// Check the supported schema and the snapshot's structural consistency.
     ///
     /// This does not establish completeness, freshness, or behavioral truth.
@@ -309,6 +316,8 @@ pub fn derive_candidate(graph: &GraphSnapshot, subject: &str) -> Result<Value, S
         "source": {
             "snapshot": &graph.id,
             "revision": &graph.revision,
+            "digest": graph.digest(),
+            "digest_basis": "normalized_graph_snapshot_v1",
         },
         "contract": {
             "schema_version": 1,

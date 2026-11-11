@@ -124,10 +124,7 @@ pub fn analyze(request: &MatchRequest) -> Result<CompositionReport, String> {
     validate_interval(&request.required.input, "required input")?;
     validate_interval(&request.required.output, "required output")?;
 
-    let established = unique_entries(
-        &request.established_assumptions,
-        "established_assumptions",
-    )?;
+    let established = unique_entries(&request.established_assumptions, "established_assumptions")?;
     let mut ids = BTreeSet::new();
 
     for primitive in &request.primitives {
@@ -291,10 +288,7 @@ fn validate_interval(interval: &Interval, label: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn unique_entries<'a>(
-    values: &'a [String],
-    label: &str,
-) -> Result<BTreeSet<&'a str>, String> {
+fn unique_entries<'a>(values: &'a [String], label: &str) -> Result<BTreeSet<&'a str>, String> {
     let mut seen = BTreeSet::new();
     for value in values {
         if value.trim().is_empty() {
