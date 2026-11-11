@@ -55,7 +55,10 @@ impl GraphSnapshot {
     /// Hash the normalized typed snapshot, including defaulted fields.
     pub fn digest(&self) -> String {
         let value = serde_json::to_value(self).expect("graph snapshot");
-        format!("{:x}", Sha256::digest(serde_json::to_vec(&value).expect("graph JSON")))
+        format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(&value).expect("graph JSON"))
+        )
     }
 
     /// Check the supported schema and the snapshot's structural consistency.

@@ -187,11 +187,18 @@ impl Evaluator for NativeEvaluator {
         let candidate = if contract.get("status").and_then(Value::as_str) == Some("candidate") {
             match serde_json::from_value::<Candidate>(contract.clone()) {
                 Ok(candidate) => {
-                    if [&candidate.subject, &candidate.source.snapshot, &candidate.source.revision,
-                        &candidate.source.digest, &candidate.source.digest_basis]
-                        .iter().any(|value| value.trim().is_empty())
+                    if [
+                        &candidate.subject,
+                        &candidate.source.snapshot,
+                        &candidate.source.revision,
+                        &candidate.source.digest,
+                        &candidate.source.digest_basis,
+                    ]
+                    .iter()
+                    .any(|value| value.trim().is_empty())
                     {
-                        return report.failure(Status::Error, "Candidate identity fields must be nonempty");
+                        return report
+                            .failure(Status::Error, "Candidate identity fields must be nonempty");
                     }
                     report.contract_context = Some(serde_json::json!({
                         "status": candidate.status,
@@ -200,7 +207,9 @@ impl Evaluator for NativeEvaluator {
                     }));
                     Some(candidate.contract)
                 }
-                Err(error) => return report.failure(Status::Error, format!("Invalid candidate: {error}")),
+                Err(error) => {
+                    return report.failure(Status::Error, format!("Invalid candidate: {error}"));
+                }
             }
         } else {
             None
@@ -308,7 +317,9 @@ struct ProcessOutput {
 impl CueEvaluator {
     pub fn new(binary: PathBuf, timeout: Duration) -> Self {
         let binary = if binary.is_relative() && binary.components().count() > 1 {
-            std::env::current_dir().map(|directory| directory.join(&binary)).unwrap_or(binary)
+            std::env::current_dir()
+                .map(|directory| directory.join(&binary))
+                .unwrap_or(binary)
         } else {
             binary
         };
@@ -370,8 +381,11 @@ impl CueEvaluator {
                 }
             }
         };
-        let final_size = output.as_file().metadata()
-            .map_err(|error| (Status::Error, error.to_string()))?.len();
+        let final_size = output
+            .as_file()
+            .metadata()
+            .map_err(|error| (Status::Error, error.to_string()))?
+            .len();
         if final_size > 1_048_576 {
             return Err((Status::Error, "CUE output exceeded 1 MiB".to_owned()));
         }

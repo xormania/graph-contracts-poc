@@ -52,7 +52,11 @@ if mode == "timeout":
     sys.exit(0)
 sys.exit(0)
 "#;
-    fs::write(&executable, script.replace("__MODE__", &serde_json::to_string(mode).unwrap())).unwrap();
+    fs::write(
+        &executable,
+        script.replace("__MODE__", &serde_json::to_string(mode).unwrap()),
+    )
+    .unwrap();
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
     let state = executable.with_extension("state.json");
     (directory, executable, state)
@@ -78,7 +82,10 @@ fn diagnostic(report: &Value) -> String {
 fn explicit_relative_cue_path_survives_the_temporary_working_directory() {
     let (_directory, executable, _state) = fixture("success", true);
     let working_directory = std::env::current_dir().unwrap();
-    let relative = executable.strip_prefix(&working_directory).unwrap().to_path_buf();
+    let relative = executable
+        .strip_prefix(&working_directory)
+        .unwrap()
+        .to_path_buf();
     assert!(relative.is_relative());
     let report = evaluate(relative, Duration::from_secs(3));
     assert_eq!(report["status"], "satisfied", "{report}");
@@ -94,7 +101,10 @@ fn cue_diagnostics_keep_utf8_and_distinguish_execution_exit_codes() {
         let text = diagnostic(&report);
         assert!(!text.trim().is_empty());
         if mode == "unicode" {
-            assert!(text.contains('\u{e9}'), "Unicode diagnostic must remain readable");
+            assert!(
+                text.contains('\u{e9}'),
+                "Unicode diagnostic must remain readable"
+            );
         }
     }
 }
@@ -117,11 +127,17 @@ fn timed_out_cue_is_reaped_and_its_evaluation_directory_is_removed() {
     assert!(started.elapsed() < Duration::from_secs(3));
 
     let trace: Value = serde_json::from_slice(&fs::read(state).unwrap()).unwrap();
-    assert_eq!(trace["operation"], "vet", "fixture must reach its slow operation");
+    assert_eq!(
+        trace["operation"], "vet",
+        "fixture must reach its slow operation"
+    );
     assert!(!Path::new(trace["cwd"].as_str().unwrap()).exists());
     #[cfg(target_os = "linux")]
     {
         let pid = trace["pid"].as_u64().unwrap();
-        assert!(!Path::new(&format!("/proc/{pid}")).exists(), "timed-out child must be reaped");
+        assert!(
+            !Path::new(&format!("/proc/{pid}")).exists(),
+            "timed-out child must be reaped"
+        );
     }
 }

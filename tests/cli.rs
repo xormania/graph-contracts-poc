@@ -10,7 +10,11 @@ fn binary() -> Command {
 
 fn invoke(command: &mut Command, input: Option<&Value>) -> (Output, Value) {
     command
-        .stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() })
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = command.spawn().expect("start gcp");
@@ -45,7 +49,12 @@ fn write_json(directory: &Path, name: &str, value: &Value) -> PathBuf {
 
 fn check(contract: &Path, input: &Path) -> Command {
     let mut command = binary();
-    command.arg("check").arg("--contract").arg(contract).arg("--input").arg(input);
+    command
+        .arg("check")
+        .arg("--contract")
+        .arg(contract)
+        .arg("--input")
+        .arg(input);
     command
 }
 
@@ -60,8 +69,17 @@ fn cli_and_provider_discovery_expose_the_same_capabilities() {
     assert!(provider_output.status.success());
     assert_eq!(direct, provider);
     let capabilities = direct["capabilities"].as_array().unwrap();
-    for name in ["graph.inspect", "contract.derive", "contract.evaluate", "contract.compare", "reuse.analyze"] {
-        let capability = capabilities.iter().find(|item| item["name"] == name).unwrap();
+    for name in [
+        "graph.inspect",
+        "contract.derive",
+        "contract.evaluate",
+        "contract.compare",
+        "reuse.analyze",
+    ] {
+        let capability = capabilities
+            .iter()
+            .find(|item| item["name"] == name)
+            .unwrap();
         assert_eq!(capability["input_schema"]["type"], "object");
         assert_eq!(capability["input_schema"]["additionalProperties"], false);
     }
@@ -142,18 +160,25 @@ fn missing_cue_makes_comparison_not_comparable() {
     let missing_cue = directory.path().join("absent-cue");
     let (output, report) = invoke(
         binary()
-            .arg("--cue").arg(missing_cue)
+            .arg("--cue")
+            .arg(missing_cue)
             .arg("compare")
-            .arg("--native").arg(contract)
-            .arg("--cue-contract").arg(cue_contract)
-            .arg("--input").arg(input),
+            .arg("--native")
+            .arg(contract)
+            .arg("--cue-contract")
+            .arg(cue_contract)
+            .arg("--input")
+            .arg(input),
         None,
     );
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(report["agreement"], "not_comparable");
     assert_eq!(report["native"]["status"], "satisfied");
     assert_eq!(report["cue"]["status"], "unsupported");
-    assert_eq!(report["native"]["input_digest"], report["cue"]["input_digest"]);
+    assert_eq!(
+        report["native"]["input_digest"],
+        report["cue"]["input_digest"]
+    );
 }
 
 #[test]
@@ -191,7 +216,12 @@ fn cli_and_provider_preserve_candidate_context_and_full_contract_identity() {
             request["arguments"]["contract"]["source"]
         );
     }
-    for field in ["status", "contract_digest", "input_digest", "contract_context"] {
+    for field in [
+        "status",
+        "contract_digest",
+        "input_digest",
+        "contract_context",
+    ] {
         assert_eq!(cli_report[field], provider_report[field], "{field}");
     }
 }

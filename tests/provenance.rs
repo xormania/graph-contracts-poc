@@ -28,12 +28,18 @@ fn equivalent_candidate_rules_retain_distinct_source_identity() {
     let first_candidate = derive_candidate(&first, "service").unwrap();
     let second_candidate = derive_candidate(&second, "service").unwrap();
     assert_eq!(first_candidate["contract"], second_candidate["contract"]);
-    assert_ne!(first_candidate["source"]["digest"], second_candidate["source"]["digest"]);
+    assert_ne!(
+        first_candidate["source"]["digest"],
+        second_candidate["source"]["digest"]
+    );
     assert_eq!(
         first_candidate["source"]["digest"],
         digest(&serde_json::to_value(&first).unwrap())
     );
-    assert_eq!(first_candidate["source"]["digest_basis"], "normalized_graph_snapshot_v1");
+    assert_eq!(
+        first_candidate["source"]["digest_basis"],
+        "normalized_graph_snapshot_v1"
+    );
 
     let input = serde_json::to_value(&first).unwrap();
     let first_report = evaluate(&first_candidate, &input);
@@ -41,13 +47,22 @@ fn equivalent_candidate_rules_retain_distinct_source_identity() {
     assert_eq!(first_report["status"], "satisfied");
     assert_eq!(second_report["status"], "satisfied");
     assert_eq!(first_report["findings"], second_report["findings"]);
-    assert_ne!(first_report["contract_digest"], second_report["contract_digest"]);
+    assert_ne!(
+        first_report["contract_digest"],
+        second_report["contract_digest"]
+    );
     assert_eq!(first_report["contract_digest"], digest(&first_candidate));
     assert_eq!(second_report["contract_digest"], digest(&second_candidate));
     assert_eq!(first_report["contract_context"]["status"], "candidate");
     assert_eq!(first_report["contract_context"]["subject"], "service");
-    assert_eq!(first_report["contract_context"]["source"], first_candidate["source"]);
-    assert_eq!(second_report["contract_context"]["source"], second_candidate["source"]);
+    assert_eq!(
+        first_report["contract_context"]["source"],
+        first_candidate["source"]
+    );
+    assert_eq!(
+        second_report["contract_context"]["source"],
+        second_candidate["source"]
+    );
 }
 
 #[test]

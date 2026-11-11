@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, "work/**"]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -20,8 +20,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
       - name: Prepare pinned tools
         run: |
           rustup show active-toolchain
@@ -30,18 +28,8 @@ jobs:
           echo "a39b0c97695069d95d276d99be0f5dbabb081d801bfdc9ba49b76efaf94e2369  $RUNNER_TEMP/cue.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/cue.tar.gz" -C "$RUNNER_TEMP/cue-bin" cue
           echo "CUE_BIN=$RUNNER_TEMP/cue-bin/cue" >> "$GITHUB_ENV"
-      - name: Bootstrap formatting and dependency lock
-        run: |
-          cargo fmt --all
-          cargo generate-lockfile
-          python3 - <<'PY'
-          import base64
-          import json
-          from pathlib import Path
-          paths = [Path("Cargo.lock"), *Path("src").rglob("*.rs"), *Path("tests").rglob("*.rs")]
-          for path in sorted(paths):
-              print("GCP_BOOTSTRAP " + json.dumps({"path": str(path), "content": base64.b64encode(path.read_bytes()).decode()}))
-          PY
+      - name: Check formatting
+        run: cargo fmt --all -- --check
       - name: Compile and test the public behavior
         run: cargo test --locked
       - name: Exercise the pinned CUE binary
@@ -50,37 +38,6 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Prove behavioral checks reject deliberate faults
         run: python3 scripts/prove_red.py
-      - name: Prove review regressions against the original evaluator
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          import subprocess
-          source = Path("src/evaluation.rs")
-          healthy = source.read_bytes()
-          predecessor = subprocess.check_output(["git", "show", "39e1260771a5bf73d89e0370032f43677cfe9e5f:src/evaluation.rs"])
-          directory = Path("target/predecessor-proof")
-          directory.mkdir(parents=True, exist_ok=True)
-          cases = [
-              ("cue_process", "explicit_relative_cue_path_survives_the_temporary_working_directory"),
-              ("cue_process", "cue_diagnostics_keep_utf8_and_distinguish_execution_exit_codes"),
-              ("provenance", "equivalent_candidate_rules_retain_distinct_source_identity"),
-              ("cli", "cli_and_provider_preserve_candidate_context_and_full_contract_identity"),
-          ]
-          outcomes = []
-          try:
-              source.write_bytes(predecessor)
-              for module, test in cases:
-                  result = subprocess.run(["cargo", "test", "--locked", "--test", module, test, "--", "--exact", "--nocapture"], capture_output=True, text=True, timeout=90)
-                  output = result.stdout + result.stderr
-                  (directory / (test + ".log")).write_text(output)
-                  assert result.returncode != 0 and f"test {test} ... FAILED" in output and "assertion" in output and "could not compile" not in output, output
-                  outcomes.append({"test": test, "status": "failed_assertion_on_original_adapter"})
-                  print("PREDECESSOR REJECTED", test)
-          finally:
-              source.write_bytes(healthy)
-              (directory / "manifest.json").write_text(json.dumps({"baseline": "39e1260771a5bf73d89e0370032f43677cfe9e5f", "results": outcomes, "restored": source.read_bytes() == healthy}, indent=2))
-          PY
       - name: Build the app
         run: cargo build --locked
       - name: Run documented experiments
@@ -90,8 +47,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: verification-${{ github.sha }}
-          path: |
-            target/prove-red/
-            target/predecessor-proof/
+          path: target/prove-red/
           retention-days: 14
           if-no-files-found: ignore
