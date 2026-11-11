@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/xormania/xorchestrate.git",
+  "revision": "bccc822b03e1272dc0675e62cc4b1036605d047a",
+  "xcontracts_revision": "6abe0e368b46f228edc69354b3bbe24413a00836",
+  "source_pr": "https://github.com/xormania/xorchestrate/pull/70",
+  "terminal_api": "provisional_xorchestrate_port"
+}

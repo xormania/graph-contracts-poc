@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: graph-contracts-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Rust and CUE
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Prepare pinned tools
+        run: |
+          rustup show active-toolchain
+          mkdir -p "$RUNNER_TEMP/cue-bin"
+          curl --fail --location --retry 2 --output "$RUNNER_TEMP/cue.tar.gz" https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_amd64.tar.gz
+          echo "a39b0c97695069d95d276d99be0f5dbabb081d801bfdc9ba49b76efaf94e2369  $RUNNER_TEMP/cue.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/cue.tar.gz" -C "$RUNNER_TEMP/cue-bin" cue
+          echo "CUE_BIN=$RUNNER_TEMP/cue-bin/cue" >> "$GITHUB_ENV"
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Compile and test the public behavior
+        run: cargo test --locked
+      - name: Exercise the pinned CUE binary
+        run: cargo test --locked --test cue -- --ignored
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Prove behavioral checks reject deliberate faults
+        run: python3 scripts/prove_red.py
+      - name: Build the app
+        run: cargo build --locked
+      - name: Run documented experiments
+        run: python3 scripts/smoke.py
+      - name: Retain calibration evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verification-${{ github.sha }}
+          path: target/prove-red/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  local-workflow:
+    name: Local workflow and terminal ports
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Prepare local workflow prerequisites
+        run: |
+          rustup show active-toolchain
+          mkdir -p .poc
+          python3 -m venv .poc/bootstrap
+          .poc/bootstrap/bin/python -m pip install --disable-pip-version-check uv==0.13.7
+          echo "$PWD/.poc/bootstrap/bin" >> "$GITHUB_PATH"
+          if ! command -v tmux >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y tmux
+          fi
+      - name: Cold setup and reusable warm setup
+        run: |
+          python3 scripts/poc.py setup --terminal
+          python3 scripts/poc.py setup --terminal
+          python3 scripts/poc.py doctor
+      - name: Independent workflow behavior
+        run: python3 -m unittest discover -s tests -p 'test_poc_workflow.py' -v
+      - name: Calibrate workflow checks
+        run: python3 scripts/prove_poc_red.py
+      - name: Run and repeat all documented experiments
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import sys
+          def call(*args):
+              result = subprocess.run([sys.executable, "scripts/poc.py", "--json", *args],
+                                      check=True, capture_output=True, text=True, timeout=120)
+              return json.loads(result.stdout)
+          first = call("run", "--no-build")
+          second = call("repeat", first["directory"], "--no-build")
+          comparison = call("compare", first["directory"], second["directory"])
+          assert first["checks"] == second["checks"] == "passed"
+          assert len(first["cases"]) == 20
+          assert comparison["same_requests"] and not comparison["binary_changed"]
+          output = Path("target/local-workflow")
+          output.mkdir(parents=True, exist_ok=True)
+          (output / "comparison.json").write_text(json.dumps(comparison, indent=2))
+          shutil.copytree(".poc/runs", output / "runs")
+          shutil.copyfile(".poc/setup.json", output / "setup.json")
+          print(json.dumps({"status": "passed", "cases_per_run": len(first["cases"]),
+                            "fresh_runs": [first["id"], second["id"]]}))
+          PY
+      - name: Probe the real CLI provider through the public launcher
+        run: python3 scripts/poc.py probe-host
+      - name: Probe real terminal adapters and calibrate cleanup
+        run: .poc/host/source/.venv/bin/python scripts/prove_terminal_red.py
+      - name: Retain local workflow evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: local-workflow-evidence
+          path: |
+            target/local-workflow/
+            target/prove-poc-red/
+            target/prove-terminal-red/
+            .poc/probes/
+            .poc/setup.json
+            .poc/setup-logs/
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: warn

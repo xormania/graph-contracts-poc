@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "example-workspace",
+  "revision": "source-v2",
+  "nodes": {
+    "caller": {
+      "kind": "consumer",
+      "attributes": {
+        "language": "rust"
+      },
+      "evidence": [
+        "example:source/caller"
+      ]
+    },
+    "parser": {
+      "kind": "capability",
+      "attributes": {
+        "format": "json",
+        "max_bytes": 2048
+      },
+      "evidence": [
+        "example:source/parser"
+      ]
+    },
+    "store": {
+      "kind": "port",
+      "attributes": {
+        "durable": true
+      },
+      "evidence": [
+        "example:declared/store"
+      ]
+    }
+  },
+  "edges": [
+    {
+      "id": "caller-parser",
+      "from": "caller",
+      "to": "parser",
+      "relation": "calls",
+      "evidence": [
+        "example:static/call"
+      ]
+    },
+    {
+      "id": "parser-store",
+      "from": "parser",
+      "to": "store",
+      "relation": "uses",
+      "evidence": [
+        "example:configured/binding"
+      ]
+    }
+  ]
+}
