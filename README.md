@@ -7,6 +7,40 @@ Xorchestrate remains the host for orchestration.
 
 ## Start here
 
+For a prepared local workflow on Linux/WSL2:
+
+```sh
+python3 scripts/poc.py setup
+python3 scripts/poc.py doctor
+python3 scripts/poc.py list
+python3 scripts/poc.py run
+```
+
+Setup builds the Rust app and installs the checksum-verified CUE binary locally.
+The six editable scenarios cover 20 cases. Each run saves its inputs, requests,
+results and diagnostics; repeat reuses those captured inputs in a fresh directory.
+Add --scenario native, --scenario candidate-drift, or another listed scenario
+to focus the experiment. Native-only setup is available with setup --no-cue.
+
+For the optional Xorchestrate terminal/provider connection:
+
+```sh
+python3 scripts/poc.py setup --terminal
+python3 scripts/poc.py probe-host
+python3 scripts/poc.py terminal start
+python3 scripts/poc.py terminal attach
+```
+
+This consumes the TerminalHost port at a pinned revision of Xorchestrate PR #70.
+Its provisional interface is isolated in development tooling. The actual
+tmux/detached adapter owns lifecycle; the Rust application stays independent.
+Optional host setup requires Python 3.12+, git and uv; interactive work needs tmux.
+
+[Local workflow guide](docs/local-workflow.md) covers prerequisites, saved runs,
+repeat/compare, terminal controls, source pins, and the real integration probes.
+
+## Use the Rust app directly
+
 The repository pins Rust **1.99.1** in [rust-toolchain.toml](rust-toolchain.toml).
 Native experiments need only that toolchain. CUE experiments additionally use
 **CUE v0.17.1**; put that executable on PATH or pass its absolute path with `--cue`.

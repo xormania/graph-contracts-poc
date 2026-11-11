@@ -22,7 +22,7 @@ OUTPUT = ROOT / "target" / "prove-terminal-red"
 DEADLINE = 90
 EXPECTED = "AssertionError: consumer claimed cleanup but the original terminal is live"
 OLD = '            closure = host.close_terminal(name)\n            record["last_observation"]'
-NEW = ('            closure = SimpleNamespace(terminal=host.adopt(record["receipt"]), cleanup_verified=True)\n'
+NEW = ('            closure = SimpleNamespace(terminal=next(item for item in host.terminals() if item.name == name), cleanup_verified=True)\n'
        '            record["last_observation"]')
 
 
@@ -84,6 +84,7 @@ def main():
         healthy, output = run_probe("healthy")
         manifest["results"]["healthy"] = healthy
         if healthy["timed_out"] or healthy["exit_code"] != 0:
+            print(output[-12000:], file=sys.stderr)
             raise AssertionError("The healthy terminal probe did not pass; inspect healthy.log.")
         report = json.loads(output.strip().splitlines()[-1])
         adapters = {item["adapter"] for item in report.get("terminal_consumers", [])
@@ -98,6 +99,7 @@ def main():
         final_line = output.strip().splitlines()[-1] if output.strip() else ""
         if (faulty["timed_out"] or faulty["exit_code"] == 0 or final_line != EXPECTED
                 or any(marker in output for marker in ("SyntaxError:", "ImportError:", "ModuleNotFoundError:"))):
+            print(output[-12000:], file=sys.stderr)
             raise AssertionError("The false-cleanup fault did not fail the intended assertion; inspect faulty.log.")
         manifest["status"] = "passed"
         manifest["detected_assertion"] = EXPECTED

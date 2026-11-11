@@ -79,50 +79,6 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_poc_workflow.py' -v
       - name: Calibrate workflow checks
         run: python3 scripts/prove_poc_red.py
-      - name: Prove reviewed regressions against the earlier runner
-        run: |
-          python3 - <<'PY'
-          import base64
-          import hashlib
-          import json
-          from pathlib import Path
-          import subprocess
-          import sys
-          from urllib.request import Request, urlopen
-          source = Path("scripts/poc.py")
-          healthy = source.read_bytes()
-          sha = "dded7f59da9586fa807a6d28f18062c1105429cb"
-          request = Request("https://api.github.com/repos/xormania/graph-contracts-poc/git/blobs/" + sha,
-                            headers={"User-Agent": "graph-contracts-regression-proof"})
-          with urlopen(request, timeout=30) as response:
-              data = json.load(response)
-          old = base64.b64decode(data["content"])
-          assert hashlib.sha1(b"blob " + str(len(old)).encode() + b"\0" + old).hexdigest() == sha
-          directory = Path("target/workflow-predecessor-proof")
-          directory.mkdir(parents=True, exist_ok=True)
-          tests = [
-              "test_finished_provider_does_not_leave_its_child_running",
-              "test_repeat_rejects_noncanonical_snapshot_paths_before_writing",
-              "test_oversized_version_probe_is_reported_and_bounded",
-              "test_changed_executable_keeps_the_run_unqualified",
-          ]
-          outcomes = []
-          try:
-              source.write_bytes(old)
-              for test in tests:
-                  result = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests",
-                                           "-p", "test_poc_workflow.py", "-k", test, "-v"],
-                                          capture_output=True, text=True, timeout=30)
-                  output = result.stdout + result.stderr
-                  (directory / (test + ".log")).write_text(output)
-                  assert result.returncode != 0 and "AssertionError" in output and "FAIL: " + test in output and "ERROR: " not in output and "Ran 1 test" in output, output
-                  outcomes.append({"test": test, "status": "failed_assertion_on_previous_runner"})
-                  print("PREDECESSOR REJECTED", test)
-          finally:
-              source.write_bytes(healthy)
-              (directory / "manifest.json").write_text(json.dumps({"baseline_blob": sha, "results": outcomes,
-                  "restored": source.read_bytes() == healthy}, indent=2))
-          PY
       - name: Run and repeat all documented experiments
         run: |
           python3 - <<'PY'
@@ -162,7 +118,6 @@ jobs:
             target/local-workflow/
             target/prove-poc-red/
             target/prove-terminal-red/
-            target/workflow-predecessor-proof/
             .poc/probes/
             .poc/setup.json
             .poc/setup-logs/

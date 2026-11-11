@@ -101,3 +101,15 @@ The Rust `Evaluator` trait is the local evaluation seam; it is not the Python ho
 
 The code is an experiment to modify. New cases should expose the distinction they investigate
 and preserve the inputs needed to reproduce an observed result.
+
+## Local experiment tooling
+
+scripts/poc.py is a development operator for bounded sequential provider requests,
+input/result capture, and fresh replay. It does not change the Rust library's ports.
+scripts/poc_terminal.py consumes Xorchestrate's selected TerminalHost; its receipts
+remain opaque and host lifecycle stays in that implementation. The optional Python
+environment is installed from the explicit source pair in poc/host-lock.json.
+
+[The local workflow guide](local-workflow.md) records the prior PoC patterns,
+the current terminal-port boundary, and the differences between experiment checks,
+domain outcomes, terminal observations, and verified cleanup.

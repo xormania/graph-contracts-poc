@@ -4,6 +4,12 @@ Use these as editable questions, not a fixed acceptance model for the broader id
 Keep the changed input, contract, command, versions, and result together so a later
 comparison describes the same experiment.
 
+The automated entry point is python3 scripts/poc.py. Run list to see the six
+named scenarios; run --scenario NAME captures a fresh attempt and prints its
+directory. The [local workflow guide](local-workflow.md) explains setup,
+editable plans, repeat/compare, and optional Xorchestrate terminals.
+The direct Rust commands below remain available for individual operations.
+
 ## 1. Separate observation, candidate, and intent
 
 Inspect the existing recorded relationships, then derive a candidate for `parser`:
