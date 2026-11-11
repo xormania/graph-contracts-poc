@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "required": {
+    "input": {
+      "min": 1,
+      "max": 10
+    },
+    "output": {
+      "min": 0,
+      "max": 100
+    }
+  },
+  "primitives": [
+    {
+      "id": "upper_range",
+      "contract": {
+        "input": {
+          "min": 5,
+          "max": 15
+        },
+        "output": {
+          "min": 10,
+          "max": 20
+        }
+      },
+      "assumptions": [],
+      "evidence": [
+        "fixture:upper-range-declaration"
+      ]
+    },
+    {
+      "id": "lower_range",
+      "contract": {
+        "input": {
+          "min": 1,
+          "max": 4
+        },
+        "output": {
+          "min": 0,
+          "max": 50
+        }
+      },
+      "assumptions": [],
+      "evidence": [
+        "fixture:lower-range-declaration"
+      ]
+    }
+  ],
+  "established_assumptions": [],
+  "couplings": [
+    {
+      "id": "shared_budget",
+      "from": "lower_range",
+      "to": "upper_range",
+      "obligations": [
+        "shared_memory_within_budget"
+      ]
+    }
+  ]
+}

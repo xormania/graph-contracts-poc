@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {
+      "id": "parser-kind",
+      "pointer": "/kind",
+      "kind": "equals",
+      "expected": "parser"
+    },
+    {
+      "id": "bounded-input",
+      "pointer": "/limits/max_bytes",
+      "kind": "integer_range",
+      "min": 1,
+      "max": 4096
+    },
+    {
+      "id": "store-binding",
+      "pointer": "/dependencies",
+      "kind": "contains",
+      "expected": {
+        "from": "parser",
+        "to": "store",
+        "relation": "uses"
+      }
+    }
+  ]
+}

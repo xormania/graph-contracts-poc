@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [master, "work/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: graph-contracts-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Rust and CUE
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Prepare pinned tools
+        run: |
+          rustup show active-toolchain
+          mkdir -p "$RUNNER_TEMP/cue-bin"
+          curl --fail --location --retry 2 --output "$RUNNER_TEMP/cue.tar.gz" https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_amd64.tar.gz
+          echo "a39b0c97695069d95d276d99be0f5dbabb081d801bfdc9ba49b76efaf94e2369  $RUNNER_TEMP/cue.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/cue.tar.gz" -C "$RUNNER_TEMP/cue-bin" cue
+          echo "CUE_BIN=$RUNNER_TEMP/cue-bin/cue" >> "$GITHUB_ENV"
+      - name: Bootstrap formatting and dependency lock
+        run: |
+          cargo fmt --all
+          cargo generate-lockfile
+          python3 - <<'PY'
+          import base64
+          import json
+          from pathlib import Path
+          paths = [Path("Cargo.lock"), *Path("src").rglob("*.rs"), *Path("tests").rglob("*.rs")]
+          for path in sorted(paths):
+              print("GCP_BOOTSTRAP " + json.dumps({"path": str(path), "content": base64.b64encode(path.read_bytes()).decode()}))
+          PY
+      - name: Compile and test the public behavior
+        run: cargo test --locked
+      - name: Exercise the pinned CUE binary
+        run: cargo test --locked --test cue -- --ignored
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Build the app
+        run: cargo build --locked

@@ -1,0 +1,13 @@
+{
+  "kind": "parser",
+  "limits": {
+    "max_bytes": 8192
+  },
+  "dependencies": [
+    {
+      "from": "parser",
+      "to": "store",
+      "relation": "uses"
+    }
+  ]
+}
