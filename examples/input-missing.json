@@ -1,0 +1,11 @@
+{
+  "kind": "parser",
+  "limits": {},
+  "dependencies": [
+    {
+      "from": "parser",
+      "to": "store",
+      "relation": "uses"
+    }
+  ]
+}

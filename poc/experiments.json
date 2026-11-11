@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "scenarios": [
+    {
+      "id": "graph",
+      "description": "Inspect recorded facts and bounded path witnesses",
+      "requires": [],
+      "cases": [
+        {
+          "id": "graph-inspect",
+          "name": "graph.inspect",
+          "arguments": {
+            "graph": {
+              "$file": "examples/graph.json"
+            }
+          },
+          "expect": {
+            "/nodes": 3,
+            "/edges": 2
+          }
+        },
+        {
+          "id": "graph-path",
+          "name": "graph.path",
+          "arguments": {
+            "graph": {
+              "$file": "examples/graph.json"
+            },
+            "from": "caller",
+            "to": "store",
+            "max_depth": 2
+          },
+          "expect": {
+            "/path/1/to": "store"
+          }
+        },
+        {
+          "id": "graph-depth",
+          "name": "graph.path",
+          "arguments": {
+            "graph": {
+              "$file": "examples/graph.json"
+            },
+            "from": "caller",
+            "to": "store",
+            "max_depth": 1
+          },
+          "expect": {
+            "/path": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "candidate-drift",
+      "description": "Hold a derived candidate fixed while changing observations",
+      "requires": [],
+      "cases": [
+        {
+          "id": "candidate",
+          "name": "contract.derive",
+          "arguments": {
+            "graph": {
+              "$file": "examples/graph.json"
+            },
+            "subject": "parser"
+          },
+          "expect": {
+            "/status": "candidate",
+            "/source/revision": "source-v1"
+          }
+        },
+        {
+          "id": "candidate-baseline",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "native",
+            "contract": {
+              "$result": "candidate"
+            },
+            "input": {
+              "$file": "examples/graph.json"
+            }
+          },
+          "expect": {
+            "/status": "satisfied",
+            "/contract_context/status": "candidate"
+          }
+        },
+        {
+          "id": "candidate-changed",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "native",
+            "contract": {
+              "$result": "candidate"
+            },
+            "input": {
+              "$file": "examples/graph-changed.json"
+            }
+          },
+          "expect": {
+            "/status": "violated",
+            "/contract_context/source/revision": "source-v1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "native",
+      "description": "Native rules on valid, contradictory, missing and reordered facts",
+      "requires": [],
+      "cases": [
+        {
+          "id": "native-valid",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "native",
+            "contract": {
+              "$file": "examples/native.json"
+            },
+            "input": {
+              "$file": "examples/input.json"
+            }
+          },
+          "expect": {
+            "/status": "satisfied"
+          }
+        },
+        {
+          "id": "native-violated",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "native",
+            "contract": {
+              "$file": "examples/native.json"
+            },
+            "input": {
+              "$file": "examples/input-violated.json"
+            }
+          },
+          "expect": {
+            "/status": "violated"
+          }
+        },
+        {
+          "id": "native-missing",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "native",
+            "contract": {
+              "$file": "examples/native.json"
+            },
+            "input": {
+              "$file": "examples/input-missing.json"
+            }
+          },
+          "expect": {
+            "/status": "unknown"
+          }
+        },
+        {
+          "id": "native-reordered",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "native",
+            "contract": {
+              "$file": "examples/native.json"
+            },
+            "input": {
+              "$file": "examples/input-reordered.json"
+            }
+          },
+          "expect": {
+            "/status": "satisfied"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cue",
+      "description": "The same fact variations against the authored CUE contract",
+      "requires": [
+        "cue"
+      ],
+      "cases": [
+        {
+          "id": "cue-valid",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "cue",
+            "contract": {
+              "$file": "examples/contract.cue"
+            },
+            "input": {
+              "$file": "examples/input.json"
+            }
+          },
+          "expect": {
+            "/status": "satisfied"
+          }
+        },
+        {
+          "id": "cue-violated",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "cue",
+            "contract": {
+              "$file": "examples/contract.cue"
+            },
+            "input": {
+              "$file": "examples/input-violated.json"
+            }
+          },
+          "expect": {
+            "/status": "violated"
+          }
+        },
+        {
+          "id": "cue-missing",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "cue",
+            "contract": {
+              "$file": "examples/contract.cue"
+            },
+            "input": {
+              "$file": "examples/input-missing.json"
+            }
+          },
+          "expect": {
+            "/status": "violated"
+          }
+        },
+        {
+          "id": "cue-reordered",
+          "name": "contract.evaluate",
+          "arguments": {
+            "backend": "cue",
+            "contract": {
+              "$file": "examples/contract.cue"
+            },
+            "input": {
+              "$file": "examples/input-reordered.json"
+            }
+          },
+          "expect": {
+            "/status": "violated"
+          }
+        }
+      ]
+    },
+    {
+      "id": "compare",
+      "description": "Agreement, indeterminate comparison and authored semantic disagreement",
+      "requires": [
+        "cue"
+      ],
+      "cases": [
+        {
+          "id": "compare-valid",
+          "name": "contract.compare",
+          "arguments": {
+            "native": {
+              "$file": "examples/native.json"
+            },
+            "cue": {
+              "$file": "examples/contract.cue"
+            },
+            "input": {
+              "$file": "examples/input.json"
+            }
+          },
+          "expect": {
+            "/agreement": "agree"
+          }
+        },
+        {
+          "id": "compare-missing",
+          "name": "contract.compare",
+          "arguments": {
+            "native": {
+              "$file": "examples/native.json"
+            },
+            "cue": {
+              "$file": "examples/contract.cue"
+            },
+            "input": {
+              "$file": "examples/input-missing.json"
+            }
+          },
+          "expect": {
+            "/agreement": "not_comparable",
+            "/native/status": "unknown",
+            "/cue/status": "violated"
+          }
+        },
+        {
+          "id": "compare-reordered",
+          "name": "contract.compare",
+          "arguments": {
+            "native": {
+              "$file": "examples/native.json"
+            },
+            "cue": {
+              "$file": "examples/contract.cue"
+            },
+            "input": {
+              "$file": "examples/input-reordered.json"
+            }
+          },
+          "expect": {
+            "/agreement": "disagree"
+          }
+        }
+      ]
+    },
+    {
+      "id": "reuse",
+      "description": "Partial coverage, completed interval coverage and a coupling gap",
+      "requires": [],
+      "cases": [
+        {
+          "id": "reuse-partial",
+          "name": "reuse.analyze",
+          "arguments": {
+            "request": {
+              "$file": "examples/reuse.json"
+            }
+          },
+          "expect": {
+            "/complete": false,
+            "/residual": [
+              {
+                "min": 1,
+                "max": 4
+              }
+            ]
+          }
+        },
+        {
+          "id": "reuse-complete",
+          "name": "reuse.analyze",
+          "arguments": {
+            "request": {
+              "$file": "examples/reuse-complete.json"
+            }
+          },
+          "expect": {
+            "/complete": true,
+            "/residual": []
+          }
+        },
+        {
+          "id": "reuse-coupling",
+          "name": "reuse.analyze",
+          "arguments": {
+            "request": {
+              "$file": "examples/coupling-gap.json"
+            }
+          },
+          "expect": {
+            "/complete": false,
+            "/residual": [],
+            "/coupling_findings/0/missing_obligations": [
+              "shared_memory_within_budget"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

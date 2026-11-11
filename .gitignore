@@ -1,2 +1,5 @@
 /target/
 /experiments/local/
+/.poc/
+__pycache__/
+*.py[cod]

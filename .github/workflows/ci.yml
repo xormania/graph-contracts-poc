@@ -50,3 +50,122 @@ jobs:
           path: target/prove-red/
           retention-days: 14
           if-no-files-found: ignore
+
+  local-workflow:
+    name: Local workflow and terminal ports
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Prepare local workflow prerequisites
+        run: |
+          rustup show active-toolchain
+          mkdir -p .poc
+          python3 -m venv .poc/bootstrap
+          .poc/bootstrap/bin/python -m pip install --disable-pip-version-check uv==0.13.7
+          echo "$PWD/.poc/bootstrap/bin" >> "$GITHUB_PATH"
+          if ! command -v tmux >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y tmux
+          fi
+      - name: Cold setup and reusable warm setup
+        run: |
+          python3 scripts/poc.py setup --terminal
+          python3 scripts/poc.py setup --terminal
+          python3 scripts/poc.py doctor
+      - name: Independent workflow behavior
+        run: python3 -m unittest discover -s tests -p 'test_poc_workflow.py' -v
+      - name: Calibrate workflow checks
+        run: python3 scripts/prove_poc_red.py
+      - name: Prove reviewed regressions against the earlier runner
+        run: |
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import json
+          from pathlib import Path
+          import subprocess
+          import sys
+          from urllib.request import Request, urlopen
+          source = Path("scripts/poc.py")
+          healthy = source.read_bytes()
+          sha = "dded7f59da9586fa807a6d28f18062c1105429cb"
+          request = Request("https://api.github.com/repos/xormania/graph-contracts-poc/git/blobs/" + sha,
+                            headers={"User-Agent": "graph-contracts-regression-proof"})
+          with urlopen(request, timeout=30) as response:
+              data = json.load(response)
+          old = base64.b64decode(data["content"])
+          assert hashlib.sha1(b"blob " + str(len(old)).encode() + b"\0" + old).hexdigest() == sha
+          directory = Path("target/workflow-predecessor-proof")
+          directory.mkdir(parents=True, exist_ok=True)
+          tests = [
+              "test_finished_provider_does_not_leave_its_child_running",
+              "test_repeat_rejects_noncanonical_snapshot_paths_before_writing",
+              "test_oversized_version_probe_is_reported_and_bounded",
+              "test_changed_executable_keeps_the_run_unqualified",
+          ]
+          outcomes = []
+          try:
+              source.write_bytes(old)
+              for test in tests:
+                  result = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests",
+                                           "-p", "test_poc_workflow.py", "-k", test, "-v"],
+                                          capture_output=True, text=True, timeout=30)
+                  output = result.stdout + result.stderr
+                  (directory / (test + ".log")).write_text(output)
+                  assert result.returncode != 0 and "AssertionError" in output and "FAIL: " + test in output and "ERROR: " not in output and "Ran 1 test" in output, output
+                  outcomes.append({"test": test, "status": "failed_assertion_on_previous_runner"})
+                  print("PREDECESSOR REJECTED", test)
+          finally:
+              source.write_bytes(healthy)
+              (directory / "manifest.json").write_text(json.dumps({"baseline_blob": sha, "results": outcomes,
+                  "restored": source.read_bytes() == healthy}, indent=2))
+          PY
+      - name: Run and repeat all documented experiments
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import sys
+          def call(*args):
+              result = subprocess.run([sys.executable, "scripts/poc.py", "--json", *args],
+                                      check=True, capture_output=True, text=True, timeout=120)
+              return json.loads(result.stdout)
+          first = call("run", "--no-build")
+          second = call("repeat", first["directory"], "--no-build")
+          comparison = call("compare", first["directory"], second["directory"])
+          assert first["checks"] == second["checks"] == "passed"
+          assert len(first["cases"]) == 20
+          assert comparison["same_requests"] and not comparison["binary_changed"]
+          output = Path("target/local-workflow")
+          output.mkdir(parents=True, exist_ok=True)
+          (output / "comparison.json").write_text(json.dumps(comparison, indent=2))
+          shutil.copytree(".poc/runs", output / "runs")
+          shutil.copyfile(".poc/setup.json", output / "setup.json")
+          print(json.dumps({"status": "passed", "cases_per_run": len(first["cases"]),
+                            "fresh_runs": [first["id"], second["id"]]}))
+          PY
+      - name: Probe the real CLI provider through the public launcher
+        run: python3 scripts/poc.py probe-host
+      - name: Probe real terminal adapters and calibrate cleanup
+        run: .poc/host/source/.venv/bin/python scripts/prove_terminal_red.py
+      - name: Retain local workflow evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: local-workflow-evidence
+          path: |
+            target/local-workflow/
+            target/prove-poc-red/
+            target/prove-terminal-red/
+            target/workflow-predecessor-proof/
+            .poc/probes/
+            .poc/setup.json
+            .poc/setup-logs/
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: warn
